@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unstable Unicorns Framework - Final Integration</title>
+    <title>Unstable Unicorns Framework - Multiplayer Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap');
@@ -134,6 +134,29 @@
         
         .card-back::after { content: "UU"; }
 
+        .player-select-btn {
+            background: linear-gradient(135deg, #4299e1, #667eea);
+            color: white;
+            font-family: 'Fredoka One', cursive;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            border: 2px solid #cbd5e0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            text-align: center;
+            min-width: 200px;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .player-select-btn:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.5);
+        }
+
         #game-board {
             flex: 1;
             display: flex;
@@ -167,18 +190,37 @@
 
         .stable {
             display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .stable-row {
+            display: flex;
             flex-wrap: wrap;
             gap: 6px;
             justify-content: center;
             width: 100%;
-            align-content: flex-start;
+            min-height: 20px;
         }
-        
-        .stable.small-cards .game-card { width: 65px; height: 95px; }
-        .stable.small-cards .card-header { font-size: 0.5rem; padding: 1px;}
-        .stable.small-cards .card-image-placeholder { font-size: 1.1rem; min-height: 25px; }
-        .stable.small-cards .card-type { font-size: 0.45rem; padding: 1px; }
-        .stable.small-cards .card-effect { font-size: 0.45rem; padding: 1px; }
+
+        .stable-row.small-cards {
+            gap: 4px;
+        }
+
+        .stable-row.small-cards .game-card { width: 65px; height: 95px; }
+        .stable-row.small-cards .card-header { font-size: 0.5rem; padding: 1px;}
+        .stable-row.small-cards .card-image-placeholder { font-size: 1.1rem; min-height: 25px; }
+        .stable-row.small-cards .card-type { font-size: 0.45rem; padding: 1px; }
+        .stable-row.small-cards .card-effect { font-size: 0.45rem; padding: 1px; }
+
+        .stable-divider {
+            width: 80%;
+            height: 2px;
+            background-color: rgba(255,255,255,0.1);
+            margin: 6px auto;
+            border-radius: 2px;
+        }
 
         .opponent-visible-hand {
             display: flex;
@@ -305,18 +347,6 @@
         
         .btn-action { background-color: #48bb78; }
         .btn-action:hover { background-color: #38a169; }
-        
-        .phase-indicator {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.7);
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #4a5568;
-            font-size: 0.9rem;
-            z-index: 10;
-        }
 
         .active-player-highlight {
             border: 2px solid #f6e05e;
@@ -435,6 +465,7 @@
                 <p class="font-bold mb-2">Players Connected:</p>
                 <ul id="connected-players-list" class="text-gray-300 text-sm space-y-1 mb-4"></ul>
                 <button id="start-game-btn" class="btn btn-action w-full text-lg py-2">Start Game</button>
+                <div id="host-waiting-msg" class="text-gray-400 text-xs italic hidden mt-2">Waiting for the host to start the game...</div>
             </div>
         </div>
     </div>
@@ -448,12 +479,6 @@
 
     <div id="game-board" style="display: none;">
         
-        <div class="phase-indicator">
-            <div id="current-player-display" class="font-bold text-blue-300 text-lg mb-1">Player 1's Turn</div>
-            <div id="current-phase-display" class="text-sm">Phase: <span class="font-bold text-white">Beginning of Turn</span></div>
-            <div class="text-xs text-gray-400 mt-1">Cards in deck: <span id="deck-count-hud">0</span></div>
-        </div>
-
         <div id="toast-container"></div>
         <div id="card-tooltip"></div>
 
@@ -476,12 +501,17 @@
                     <div id="discard-top-card" class="text-xs text-gray-400 mt-1 truncate max-w-[120px]">Empty</div>
                 </div>
             </div>
+            <div class="h-4 w-px bg-gray-600"></div>
+            <div class="flex flex-col items-center bg-gray-800/80 px-4 py-2 rounded-lg border border-gray-600">
+                <div id="current-player-display" class="font-bold text-blue-300 text-sm mb-0.5">Player's Turn</div>
+                <div id="current-phase-display" class="text-xs">Phase: <span class="font-bold text-white">Beginning of Turn</span></div>
+            </div>
         </div>
 
         <div class="player-area">
             <div class="player-stable-container active-player-highlight" id="my-stable-container">
                 <div class="flex justify-between w-full mb-1 px-3">
-                    <h2 class="text-base heading-font text-blue-300">Your Stable (Player 1)</h2>
+                    <h2 id="my-stable-title" class="text-base heading-font text-blue-300">Your Stable</h2>
                     <div class="text-xs bg-gray-800 px-2 py-0.5 rounded border border-gray-600">
                         Unicorns: <span id="my-unicorn-count" class="font-bold text-white">0</span> / <span id="win-condition-display">7</span>
                     </div>
@@ -513,9 +543,11 @@
     </div>
 
     <script>
-        // Native WebSocket Connection State
+        // Native WebSocket Connection State & Client ID Tracking
         let ws = null;
         let connectedPlayers = [];
+        let localPlayerIndex = -1;
+        const myClientId = 'client_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
 
         // Game Enums and Data Models
         const CardTypes = {
@@ -588,12 +620,29 @@
             
             // Magical Unicorns
             { id: 'c_alluring', name: 'Alluring Narwhal', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may STEAL an Upgrade card.', fullImage: 'https://i.postimg.cc/d37thsrd/alluring.png' },
+            { id: 'c_americorn', name: 'Americorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, choose any player. Pull a card from that player\'s hand.', fullImage: 'https://i.postimg.cc/C5WMD3sf/americorn.png' },
+            { id: 'c_annoying', name: 'Annoying Flying Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may choose any player. That player must DISCARD a card. If this card would be sacrificed or destroyed, return it to your hand instead.', fullImage: 'https://i.postimg.cc/prgV8wJF/annoying.png' },
             { id: 'c_blackknight', name: 'Black Knight Unicorn', type: CardTypes.MAGICAL, effect: 'If 1 of your Unicorn cards would be destroyed, you may SACRIFICE this card instead.', fullImage: 'https://i.postimg.cc/KjdcL6D3/blackknight.jpg' },
+            { id: 'c_chainsaw', name: 'Chainsaw Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may SACRIFICE or DESTROY an Upgrade or Downgrade card.', fullImage: 'https://i.postimg.cc/Y0J2g5zF/chainsaw.jpg' },
+            { id: 'c_classynarwhal', name: 'Classy Narwhal', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may search the deck for an Upgrade card and add it to your hand. Shuffle the deck.', fullImage: 'https://i.postimg.cc/Zn1Y3Gx6/classynarwhal.jpg' },
             { id: 'c_ginormous', name: 'Ginormous Unicorn', type: CardTypes.MAGICAL, effect: 'This card counts for 2 Unicorns. You cannot play any Instant cards.', fullImage: 'https://i.postimg.cc/tJLRPKNd/ginormous.jpg' },
+            { id: 'c_greedy', name: 'Greedy Flying Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, DRAW a card. If this card would be sacrificed or destroyed, return it to your hand instead.', fullImage: 'https://i.postimg.cc/5yZ9vhSq/greedyflying.jpg' },
             { id: 'c_puppicorn', name: 'Puppicorn', type: CardTypes.MAGICAL, effect: 'Each time any player begins their turn, move this card to that player\'s Stable. This card cannot be sacrificed or destroyed.', fullImage: 'https://i.postimg.cc/Vv3sMxWK/puppicorn.jpg' },
             { id: 'c_queenbee', name: 'Queen Bee Unicorn', type: CardTypes.MAGICAL, effect: 'Basic Unicorn cards cannot enter any other player\'s Stable.', fullImage: 'https://i.postimg.cc/zv9DWsF2/queenbee.jpg' },
             { id: 'c_stabby', name: 'Stabby The Unicorn', type: CardTypes.MAGICAL, effect: 'If this card is sacrificed or destroyed, you may DESTROY a Unicorn card.', fullImage: 'https://i.postimg.cc/wxPjSNYg/stabby.jpg' },
-            
+            { id: 'c_magicalflying', name: 'Magical Flying Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may choose a Magic card from the discard pile and add it to your hand. If this card would be sacrificed or destroyed, return it to your hand instead.', fullImage: 'https://i.postimg.cc/RhjCfkLL/magicalflying.jpg' },
+            { id: 'c_majesticflying', name: 'Majestic Flying Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may choose a Unicorn card from the discard pile and add it to your hand. If this card would be sacrificed or destroyed, return it to your hand instead.', fullImage: 'https://i.postimg.cc/2yPjvs7w/majesticflying.jpg' },
+            { id: 'c_mermaid', name: 'Mermaid Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may choose any player. Return a card in that player\'s Stable to their hand.', fullImage: 'https://i.postimg.cc/D0tfs9P6/mermaid.jpg' },
+            { id: 'c_narwhaltorpedo', name: 'Narwhal Torpedo', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, SACRIFICE all Downgrade cards.', fullImage: 'https://i.postimg.cc/brKYb793/narwhaltorpedo.jpg' },
+            { id: 'c_rainbow', name: 'Rainbow Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may bring a Basic Unicorn card from your hand directly into your Stable.', fullImage: 'https://i.postimg.cc/BbdZDrBw/rainbow.jpg' },
+            { id: 'c_rhinocorn', name: 'Rhinocorn', type: CardTypes.MAGICAL, effect: 'If this card is in your Stable at the beginning of your turn, you may DESTROY a Unicorn card. If you do, immediately skip to your End of Turn phase.', fullImage: 'https://i.postimg.cc/sxtfSk4L/rhinocorn.jpg' },
+            { id: 'c_seductive', name: 'Seductive Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, STEAL a Unicorn card. If this card leaves your Stable, return that Unicorn card to the Stable from which you stole it.', fullImage: 'https://i.postimg.cc/j2GqNp4m/seductive.jpg' },
+            { id: 'c_shabby', name: 'Shabby The Narwhal', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may search the deck for a Downgrade card and add it to your hand. Shuffle the deck.', fullImage: 'https://i.postimg.cc/8cqkW2mx/shabby.jpg' },
+            { id: 'c_sharkwithahorn', name: 'Shark With A Horn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may SACRIFICE this card. If you do, DESTROY a Unicorn card.', fullImage: 'https://i.postimg.cc/MZ4phBJx/sharkwithahorn.jpg' },
+            { id: 'c_swiftflying', name: 'Swift Flying Unicorn', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may choose an Instant card from the discard pile and add it to your hand. If this card would be sacrificed or destroyed, return it to your hand instead.', fullImage: 'https://i.postimg.cc/xj71WmVf/swiftflying.jpg' },
+            { id: 'c_thegreatnarwhal', name: 'The Great Narwhal', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, you may search the deck for a card with "Narwhal" in its name and add it to your hand. Shuffle the deck.', fullImage: 'https://i.postimg.cc/NGVjWXvf/thegreatnarwhal.jpg' },
+            { id: 'c_unicornonthecob', name: 'Unicorn On The Cob', type: CardTypes.MAGICAL, effect: 'When this card enters your Stable, DRAW 2 cards and DISCARD a card.', fullImage: 'https://i.postimg.cc/3r6xPGQR/unicornonthecob.jpg' },
+
             // Downgrades
             { id: 'd_barbed', name: 'Barbed Wire', type: CardTypes.DOWNGRADE, effect: 'Each time a Unicorn card enters or leaves your stable, DISCARD a card.', fullImage: 'https://i.postimg.cc/6376b63M/barbedwire.jpg' },
             { id: 'd_blinding', name: 'Blinding Light', type: CardTypes.DOWNGRADE, effect: 'Triggered effects of your Unicorn cards do not activate.', fullImage: 'https://i.postimg.cc/76CPtP6R/blindinglight.jpg' },
@@ -634,42 +683,185 @@
             hasDrawnThisTurn: false,
             actionsPlayed: 0,
             actionLimit: 1,
-            triggerQueue: [] 
+            triggerQueue: [],
+            logs: [],
+            reaction: null 
         };
 
+        function updateLocalPlayerIndex() {
+            const myNameInput = document.getElementById('player-name');
+            const myName = myNameInput ? myNameInput.value.trim() : '';
+            
+            if (gameState && gameState.players && gameState.players.length > 0) {
+                let idx = gameState.players.findIndex(p => p.clientId === myClientId);
+                if (idx === -1 && myName) {
+                    idx = gameState.players.findIndex(p => p.name === myName);
+                }
+                if (idx !== -1) {
+                    localPlayerIndex = idx;
+                } else {
+                    localPlayerIndex = 0;
+                }
+            }
+        }
+
         // --- WebSocket Setup & Event Handlers ---
+        function checkIfHost() {
+            if (!connectedPlayers || connectedPlayers.length === 0) return false;
+            const myNameInput = document.getElementById('player-name');
+            const myName = myNameInput ? myNameInput.value.trim() : '';
+            const firstPlayer = connectedPlayers[0];
+            return firstPlayer.clientId === myClientId || (myName !== '' && firstPlayer.name === myName);
+        }
+
+        function updateConnectedPlayersList() {
+            const list = document.getElementById('connected-players-list');
+            const startBtn = document.getElementById('start-game-btn');
+            const hostWaitingMsg = document.getElementById('host-waiting-msg');
+            if (!list) return;
+            
+            const myNameInput = document.getElementById('player-name');
+            const myName = myNameInput ? myNameInput.value.trim() : '';
+
+            list.innerHTML = '';
+            connectedPlayers.forEach((p) => {
+                const li = document.createElement('li');
+                const isMe = p.clientId === myClientId || (myName !== '' && p.name === myName);
+                li.textContent = `• ${p.name} ${isMe ? '(You)' : ''}`;
+                list.appendChild(li);
+            });
+
+            const isHost = checkIfHost();
+            if (startBtn) {
+                if (isHost) {
+                    startBtn.style.display = 'block';
+                    if (hostWaitingMsg) hostWaitingMsg.classList.add('hidden');
+                } else {
+                    startBtn.style.display = 'none';
+                    if (hostWaitingMsg) hostWaitingMsg.classList.remove('hidden');
+                }
+            }
+        }
+
         document.getElementById('join-room-btn').addEventListener('click', () => {
             const name = document.getElementById('player-name').value.trim() || 'Player';
             const room = document.getElementById('room-code').value.trim().toUpperCase();
 
             if (!room) return alert("Please enter a room code!");
 
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/api/room/${room}`;
+            const wsUrl = `wss://unstable-unicorns-server.greeedsunny.workers.dev/api/room/${room}`;
             
             ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
+                connectedPlayers = [{ name: name, clientId: myClientId }];
+                updateConnectedPlayersList();
+
                 ws.send(JSON.stringify({
                     type: 'JOIN_ROOM',
-                    playerName: name
+                    playerName: name,
+                    clientId: myClientId
                 }));
+
                 document.getElementById('join-room-btn').style.display = 'none';
                 document.getElementById('room-status').classList.remove('hidden');
             };
 
             ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch(e) {
+                    return;
+                }
+
+                const myNameInput = document.getElementById('player-name');
+                const myName = myNameInput ? myNameInput.value.trim() : '';
+
+                if (data.type === 'JOIN_ROOM') {
+                    const incomingName = data.playerName || data.name;
+                    const incomingId = data.clientId || incomingName;
+                    
+                    if (incomingId !== myClientId && incomingName !== myName) {
+                        if (!connectedPlayers.some(p => p.clientId === incomingId || p.name === incomingName)) {
+                            connectedPlayers.push({ name: incomingName, clientId: incomingId });
+                            updateConnectedPlayersList();
+                        }
+                        
+                        if (checkIfHost()) {
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({
+                                    type: 'ROOM_UPDATE',
+                                    players: connectedPlayers
+                                }));
+                            }
+                        }
+                    }
+                }
 
                 if (data.type === 'ROOM_UPDATE') {
-                    connectedPlayers = data.players;
-                    const list = document.getElementById('connected-players-list');
-                    list.innerHTML = '';
-                    connectedPlayers.forEach(p => {
-                        const li = document.createElement('li');
-                        li.textContent = `• ${p.name}`;
-                        list.appendChild(li);
-                    });
+                    if (Array.isArray(data.players) && data.players.length > 0) {
+                        connectedPlayers = data.players.map((p) => {
+                            let playerObj = typeof p === 'string' ? { name: p } : { ...p };
+                            if (!playerObj.name && playerObj.playerName) playerObj.name = playerObj.playerName;
+                            if (playerObj.name === myName || playerObj.clientId === myClientId) {
+                                playerObj.clientId = myClientId;
+                            }
+                            return playerObj;
+                        });
+                        updateConnectedPlayersList();
+                    }
+                }
+
+                if (data.type === 'START_GAME' || data.type === 'SYNC_STATE') {
+                    const prevPlayerIdx = gameState ? gameState.currentPlayerIndex : -1;
+                    
+                    // Process external logs
+                    if (data.state && data.state.logs) {
+                        if (window.localLogLength === undefined) window.localLogLength = data.state.logs.length;
+                        if (data.state.logs.length > window.localLogLength) {
+                            for(let i = window.localLogLength; i < data.state.logs.length; i++) {
+                                showToast(data.state.logs[i]);
+                            }
+                            window.localLogLength = data.state.logs.length;
+                        } else if (data.state.logs.length < window.localLogLength) {
+                            window.localLogLength = data.state.logs.length; // Handle resets
+                        }
+                    }
+
+                    gameState = data.state;
+                    updateLocalPlayerIndex();
+
+                    if (document.getElementById('game-setup').style.display !== 'none') {
+                        document.getElementById('game-setup').style.display = 'none';
+                        document.getElementById('game-board').style.display = 'flex';
+                        if (gameState.winCondition) {
+                            document.getElementById('win-condition-display').textContent = gameState.winCondition;
+                        }
+                    }
+
+                    renderBoard();
+
+                    // Resolve Reaction Chain Hooks
+                    if (gameState.reaction) {
+                        if (gameState.reaction.resolves === null) {
+                            if (gameState.reaction.askIndex === localPlayerIndex) {
+                                handleReactionTurn();
+                            }
+                        } else {
+                            if (gameState.reaction.initiator === localPlayerIndex) {
+                                resolveReactionChain();
+                            }
+                        }
+                    }
+
+                    if (gameState.currentPlayerIndex === localPlayerIndex && !gameState.reaction) {
+                        if (data.type === 'START_GAME' || prevPlayerIdx !== localPlayerIndex) {
+                            if (gameState.currentPhase === Phases.BEGINNING) {
+                                setTimeout(startTurn, 500);
+                            }
+                        }
+                    }
                 }
             };
 
@@ -678,10 +870,18 @@
                 showToast("Connection failed. Please try again.");
             };
         });
+        
+        function broadcastGameState() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'SYNC_STATE', state: gameState }));
+            }
+        }
 
         document.getElementById('start-game-btn').addEventListener('click', () => {
-            const count = connectedPlayers.length > 1 ? connectedPlayers.length : 2;
-            initGame(count);
+            if (checkIfHost()) {
+                const count = connectedPlayers.length > 1 ? connectedPlayers.length : 2;
+                initGame(count);
+            }
         });
 
         function generateDeck() {
@@ -710,9 +910,19 @@
             setTimeout(() => { if (container.contains(toast)) container.removeChild(toast); }, 3000);
         }
 
+        function logAction(msg) {
+            if (!gameState.logs) gameState.logs = [];
+            gameState.logs.push(msg);
+            if (gameState.logs.length > 30) gameState.logs.shift();
+            showToast(msg);
+            if (window.localLogLength !== undefined) window.localLogLength = gameState.logs.length;
+            broadcastGameState();
+        }
+
         function countUnicorns(playerIndex) {
             if (hasPandamonium(playerIndex)) return 0;
             const p = gameState.players[playerIndex];
+            if (!p || !p.stable || !p.stable.unicorns) return 0;
             let count = p.stable.unicorns.length;
             p.stable.unicorns.forEach(c => { if(c.id === 'c_ginormous') count += 1; });
             return count;
@@ -728,13 +938,13 @@
             return false;
         }
 
-        function hasPandamonium(pIdx) { return gameState.players[pIdx].stable.downgrades.some(c => c.id === 'd_panda'); }
-        function hasBlindingLight(pIdx) { return gameState.players[pIdx].stable.downgrades.some(c => c.id === 'd_blinding'); }
-        function hasBrokenStable(pIdx) { return gameState.players[pIdx].stable.downgrades.some(c => c.id === 'd_broken'); }
-        function hasSlowdown(pIdx) { return gameState.players[pIdx].stable.downgrades.some(c => c.id === 'd_slowdown'); }
-        function hasBarbedWire(pIdx) { return gameState.players[pIdx].stable.downgrades.some(c => c.id === 'd_barbed'); }
-        function hasNannyCam(pIdx) { return gameState.players[pIdx].stable.downgrades.some(c => c.id === 'd_nanny'); }
-        function hasGinormous(pIdx) { return !hasPandamonium(pIdx) && gameState.players[pIdx].stable.unicorns.some(c => c.id === 'c_ginormous'); }
+        function hasPandamonium(pIdx) { return gameState.players[pIdx]?.stable?.downgrades?.some(c => c.id === 'd_panda'); }
+        function hasBlindingLight(pIdx) { return gameState.players[pIdx]?.stable?.downgrades?.some(c => c.id === 'd_blinding'); }
+        function hasBrokenStable(pIdx) { return gameState.players[pIdx]?.stable?.downgrades?.some(c => c.id === 'd_broken'); }
+        function hasSlowdown(pIdx) { return gameState.players[pIdx]?.stable?.downgrades?.some(c => c.id === 'd_slowdown'); }
+        function hasBarbedWire(pIdx) { return gameState.players[pIdx]?.stable?.downgrades?.some(c => c.id === 'd_barbed'); }
+        function hasNannyCam(pIdx) { return gameState.players[pIdx]?.stable?.downgrades?.some(c => c.id === 'd_nanny'); }
+        function hasGinormous(pIdx) { return !hasPandamonium(pIdx) && gameState.players[pIdx]?.stable?.unicorns?.some(c => c.id === 'c_ginormous'); }
 
         function isBasicBlocked(targetPlayerIndex) {
             let blocked = false;
@@ -775,7 +985,7 @@
                 showToast("No valid targets available.");
                 callback([]); return;
             }
-            if (playerIndex !== 0) {
+            if (playerIndex !== localPlayerIndex) {
                 if (isOptional && Math.random() < 0.5) { callback([]); return; }
                 callback(shuffle([...validCards]).slice(0, Math.min(count, validCards.length)));
             } else {
@@ -789,13 +999,16 @@
         function drawCard(playerIndex, updateUI = true) {
             if (gameState.deck.length === 0) {
                 if (gameState.discard.length === 0) { showToast("Deck and discard are empty!"); return null; }
-                showToast("Shuffling discard pile into deck.");
+                logAction("Shuffling discard pile into deck.");
                 gameState.deck = shuffle([...gameState.discard]);
                 gameState.discard = [];
             }
             const card = gameState.deck.pop();
             gameState.players[playerIndex].hand.push(card);
-            if (updateUI) renderBoard();
+            if (updateUI) {
+                renderBoard();
+                broadcastGameState();
+            }
             return card;
         }
 
@@ -803,19 +1016,23 @@
             const p = gameState.players[pIdx];
             let actualCount = Math.min(count, p.hand.length);
             if (actualCount === 0) { onComplete(); return; }
-            if (pIdx === 0) {
-                promptTargetSelection(0, reason, `Discard ${actualCount} card(s).`, p.hand, actualCount, (disc) => {
+            if (pIdx === localPlayerIndex) {
+                promptTargetSelection(localPlayerIndex, reason, `Discard ${actualCount} card(s).`, p.hand, actualCount, (disc) => {
                     disc.forEach(d => {
                         p.hand = p.hand.filter(c => c.uid !== d.uid);
                         gameState.discard.push(d);
                     });
+                    renderBoard();
+                    broadcastGameState();
                     onComplete();
                 });
             } else {
                 for(let i=0; i<actualCount; i++) {
                     if (p.hand.length > 0) gameState.discard.push(p.hand.splice(Math.floor(Math.random() * p.hand.length), 1)[0]);
                 }
-                showToast(`${p.name} discarded for ${reason}.`);
+                logAction(`${p.name} discarded for ${reason}.`);
+                renderBoard();
+                broadcastGameState();
                 onComplete();
             }
         }
@@ -855,13 +1072,13 @@
 
             if (actionType === 'destroy' && targetList === 'unicorns') {
                 if (p.stable.upgrades.some(c => c.id === 'u_rainbowaura')) {
-                    showToast(`Rainbow Aura protects ${p.name}'s Unicorn!`);
+                    logAction(`Rainbow Aura protects ${p.name}'s Unicorn!`);
                     onComplete(null); return;
                 }
                 if (card.id !== 'c_blackknight' && !hasPandamonium(targetPlayerIdx) && !hasBlindingLight(targetPlayerIdx)) {
                     let bkIdx = p.stable.unicorns.findIndex(c => c.id === 'c_blackknight');
                     if (bkIdx > -1) {
-                        showToast("Black Knight sacrifices itself to save a Unicorn!");
+                        logAction("Black Knight sacrifices itself to save a Unicorn!");
                         removeCardFromStable(targetPlayerIdx, p.stable.unicorns[bkIdx].uid, 'sacrifice', onComplete);
                         return;
                     }
@@ -878,19 +1095,41 @@
 
             if (actionType === 'destroy' || actionType === 'sacrifice') {
                  if (card.type === CardTypes.BABY) route = 'nursery';
+                 else if (['c_annoying', 'c_greedy', 'c_magicalflying', 'c_majesticflying', 'c_swiftflying'].includes(card.id)) route = 'hand';
                  if (card.id === 'c_stabby' && !hasBlindingLight(targetPlayerIdx)) gameState.triggerQueue.push({ type: 'stabby', ownerIdx: targetPlayerIdx });
             }
 
-            if (route === 'discard') gameState.discard.push(card);
+            if (route === 'discard') {
+                gameState.discard.push(card);
+            }
             else if (route === 'nursery') {
                 gameState.nursery.push(card);
                 showToast(`${card.name} returned to the Nursery.`);
             }
+            else if (route === 'hand') {
+                gameState.players[targetPlayerIdx].hand.push(card);
+                showToast(`${card.name} returned to hand instead of being destroyed/sacrificed.`);
+            }
+
+            // Seductive Unicorn Clause (If Seductive leaves, stolen card returns to original owner)
+            if (card.id === 'c_seductive' && card._stolenUid !== undefined) {
+                let currentOwnerStable = gameState.players[targetPlayerIdx].stable.unicorns;
+                let stolenIdx = currentOwnerStable.findIndex(c => c.uid === card._stolenUid);
+                if (stolenIdx > -1) {
+                    let returnedCard = currentOwnerStable.splice(stolenIdx, 1)[0];
+                    enterStable(returnedCard, card._originalOwner, () => {}, true);
+                    logAction(`Seductive Unicorn left, ${returnedCard.name} returned to original owner!`);
+                }
+            }
             
-            const finishRemoval = () => checkStateBasedEffects(() => onComplete(card));
+            const finishRemoval = () => {
+                renderBoard();
+                broadcastGameState();
+                checkStateBasedEffects(() => onComplete(card));
+            };
 
             if (targetList === 'unicorns' && hasBarbedWire(targetPlayerIdx)) {
-                showToast(`Barbed Wire triggered! ${p.name} must discard a card.`);
+                logAction(`Barbed Wire triggered! ${p.name} must discard a card.`);
                 triggerDiscard(targetPlayerIdx, 1, "Barbed Wire (Unicorn Left)", finishRemoval);
             } else { finishRemoval(); }
         }
@@ -902,18 +1141,20 @@
             else p.stable.unicorns.push(card);
 
             const resolveETB = () => {
+                renderBoard();
+                broadcastGameState();
                 if (triggerETB && !hasBlindingLight(targetPlayerIndex)) executeETBEffect(card, targetPlayerIndex, () => checkStateBasedEffects(onComplete));
                 else checkStateBasedEffects(onComplete);
             };
 
             if ((card.type === CardTypes.BASIC || card.type === CardTypes.MAGICAL || card.type === CardTypes.BABY) && hasBarbedWire(targetPlayerIndex)) {
-                showToast(`Barbed Wire triggered! ${p.name} must discard a card.`);
+                logAction(`Barbed Wire triggered! ${p.name} must discard a card.`);
                 triggerDiscard(targetPlayerIndex, 1, "Barbed Wire (Unicorn Entered)", resolveETB);
             } else { resolveETB(); }
         }
 
         function checkAutoEndTurn() {
-            if (gameState.currentPlayerIndex === 0 && gameState.currentPhase === Phases.ACTION) {
+            if (gameState.currentPlayerIndex === localPlayerIndex && gameState.currentPhase === Phases.ACTION) {
                 if (gameState.actionsPlayed >= gameState.actionLimit) {
                     document.getElementById('bottom-right-actions').style.display = 'none';
                     setTimeout(() => {
@@ -928,95 +1169,106 @@
             openSelectionModal("Discard Pile", "Cards currently in the discard pile.", gameState.discard, 0, () => {}, true);
         }
 
-        function proposeCardPlay(card, pIndex, onComplete) {
-            let chain = [{ card: card, playerIdx: pIndex }];
-            showToast(`\n${gameState.players[pIndex].name} is attempting to play ${card.name}...`);
-            
-            function askNext(askIndex) {
-                let lastPlay = chain[chain.length - 1].card;
-                if (lastPlay.id === 'i_superneigh' || lastPlay.canBeNeighed === false) {
-                    resolveChain(); return;
-                }
-                if (askIndex >= gameState.numPlayers) {
-                    resolveChain(); return;
-                }
-                
-                let lastPlayer = chain[chain.length - 1].playerIdx;
-                if (askIndex === lastPlayer) {
-                    askNext(askIndex + 1); return;
-                }
-                
-                let p = gameState.players[askIndex];
-                if (hasSlowdown(askIndex) || hasGinormous(askIndex)) {
-                    askNext(askIndex + 1); return; 
-                }
-                
-                let playableNeighs = p.hand.filter(c => c.id === 'i_neigh' || c.id === 'i_superneigh');
-                if (playableNeighs.length === 0) {
-                    askNext(askIndex + 1); return;
-                }
-                
-                if (askIndex === 0) {
-                    let effectText = lastPlay.effect && lastPlay.effect !== 'No effect' ? `<br><span class="text-sm text-yellow-300">Effect: ${lastPlay.effect}</span>` : '';
-                    let targetText = lastPlay._targetIdx !== undefined ? `<br><span class="text-sm text-red-400">Target: ${gameState.players[lastPlay._targetIdx].name}</span>` : '';
-                    openSelectionModal(
-                        "Reaction Phase!", 
-                        `${gameState.players[lastPlayer].name} played ${lastPlay.name}.${effectText}${targetText}<br><br>Do you want to Neigh?`, 
-                        playableNeighs, 1, 
-                        (selected) => {
-                            if (selected && selected.length > 0) {
-                                let neighCard = p.hand.find(c => c.uid === selected[0]);
-                                p.hand = p.hand.filter(c => c.uid !== selected[0]);
-                                chain.push({ card: neighCard, playerIdx: 0 });
-                                showToast(`You played ${neighCard.name}!`);
-                                renderBoard();
-                                setTimeout(() => askNext(0), 500); 
-                            } else {
-                                askNext(askIndex + 1);
-                            }
-                        }, 
-                        true 
-                    );
-                } else {
-                    if (Math.random() < 0.5) {
-                        let neighCard = playableNeighs[0];
-                        p.hand = p.hand.filter(c => c.uid !== neighCard.uid);
-                        chain.push({ card: neighCard, playerIdx: askIndex });
-                        showToast(`${p.name} played ${neighCard.name}!`);
-                        renderBoard();
-                        setTimeout(() => askNext(0), 1000); 
-                    } else {
-                        askNext(askIndex + 1);
-                    }
-                }
-            }
-            
-            function resolveChain() {
-                let originalPlay = chain[0];
-                let resolves = (chain.length % 2 !== 0); 
-                
-                for (let i = 1; i < chain.length; i++) {
-                    gameState.discard.push(chain[i].card);
-                }
-                
-                if (resolves) {
-                    if (chain.length > 1) showToast(`The final Neigh prevailed! ${originalPlay.card.name} resolves!`);
-                    playCard(originalPlay.card, originalPlay.playerIdx, onComplete);
-                } else {
-                    showToast(`The play was Neigh'd! ${originalPlay.card.name} goes to the discard pile.`);
-                    gameState.discard.push(originalPlay.card);
-                    onComplete();
-                }
-            }
-            
-            setTimeout(() => askNext(0), 800);
+        // --- Networked Reaction Chain Logic (Replaces local askNext) ---
+        function proposeCardPlay(card, pIndex) {
+            gameState.reaction = {
+                chain: [{ card: card, playerIdx: pIndex }],
+                askIndex: (pIndex + 1) % gameState.numPlayers,
+                initiator: pIndex,
+                resolves: null
+            };
+            logAction(`${gameState.players[pIndex].name} is attempting to play ${card.name}...`);
         }
 
+        function handleReactionTurn() {
+            if (window.isReacting) return;
+            window.isReacting = true;
+            
+            let lastPlay = gameState.reaction.chain[gameState.reaction.chain.length - 1];
+            
+            const pass = () => {
+                window.isReacting = false;
+                gameState.reaction.askIndex = (gameState.reaction.askIndex + 1) % gameState.numPlayers;
+                
+                let newLastPlayer = gameState.reaction.chain[gameState.reaction.chain.length - 1].playerIdx;
+                if (gameState.reaction.askIndex === newLastPlayer) {
+                    gameState.reaction.resolves = (gameState.reaction.chain.length % 2 !== 0);
+                }
+                broadcastGameState();
+            };
+
+            if (lastPlay.card.id === 'i_superneigh' || lastPlay.card.canBeNeighed === false) {
+                pass(); return;
+            }
+            if (hasSlowdown(localPlayerIndex) || hasGinormous(localPlayerIndex)) {
+                pass(); return;
+            }
+            
+            let p = gameState.players[localPlayerIndex];
+            let playableNeighs = p.hand.filter(c => c.id === 'i_neigh' || c.id === 'i_superneigh');
+            
+            if (playableNeighs.length === 0) {
+                pass(); return;
+            }
+
+            let effectText = lastPlay.card.effect && lastPlay.card.effect !== 'No effect' ? `<br><span class="text-sm text-yellow-300">Effect: ${lastPlay.card.effect}</span>` : '';
+            let targetText = lastPlay.card._targetIdx !== undefined ? `<br><span class="text-sm text-red-400">Target: ${gameState.players[lastPlay.card._targetIdx].name}</span>` : '';
+            
+            openSelectionModal(
+                "Reaction Phase!", 
+                `${gameState.players[lastPlay.playerIdx].name} played ${lastPlay.card.name}.${effectText}${targetText}<br><br>Do you want to Neigh?`, 
+                playableNeighs, 1, 
+                (selected) => {
+                    if (selected && selected.length > 0) {
+                        let neighCard = p.hand.find(c => c.uid === selected[0]);
+                        p.hand = p.hand.filter(c => c.uid !== selected[0]);
+                        gameState.reaction.chain.push({ card: neighCard, playerIdx: localPlayerIndex });
+                        gameState.reaction.askIndex = (localPlayerIndex + 1) % gameState.numPlayers;
+                        window.isReacting = false;
+                        logAction(`${gameState.players[localPlayerIndex].name} played ${neighCard.name}!`);
+                    } else {
+                        pass();
+                    }
+                }, 
+                true 
+            );
+        }
+
+        function resolveReactionChain() {
+            let resolves = gameState.reaction.resolves;
+            let originalPlay = gameState.reaction.chain[0];
+            
+            for (let i = 1; i < gameState.reaction.chain.length; i++) {
+                gameState.discard.push(gameState.reaction.chain[i].card);
+            }
+            
+            const finishResolve = () => {
+                renderBoard();
+                broadcastGameState();
+                if (!checkWinCondition()) checkAutoEndTurn();
+            };
+
+            gameState.reaction = null; 
+            
+            if (resolves) {
+                if (gameState.discard.length > 0 && originalPlay.chain && originalPlay.chain.length > 1) {
+                    logAction(`The final Neigh prevailed! ${originalPlay.card.name} resolves!`);
+                }
+                playCard(originalPlay.card, originalPlay.playerIdx, finishResolve);
+            } else {
+                logAction(`The play was Neigh'd! ${originalPlay.card.name} goes to the discard pile.`);
+                gameState.discard.push(originalPlay.card);
+                finishResolve();
+            }
+        }
+        // -----------------------------------------------------------
+
         function playCard(card, pIndex, onComplete) {
-            showToast(`${gameState.players[pIndex].name} played ${card.name}!`);
             if (card.type === CardTypes.MAGIC) {
                 resolveMagicCard(card, pIndex, () => {
                     gameState.discard.push(card);
+                    renderBoard();
+                    broadcastGameState();
                     onComplete();
                 });
             } else if (card.type === CardTypes.UPGRADE || card.type === CardTypes.DOWNGRADE || card.type === CardTypes.BASIC || card.type === CardTypes.MAGICAL) {
@@ -1024,6 +1276,8 @@
                 enterStable(card, targetIdx, onComplete, true);
             } else {
                 gameState.discard.push(card);
+                renderBoard();
+                broadcastGameState();
                 onComplete();
             }
         }
@@ -1053,11 +1307,22 @@
                     });
                 } else onComplete();
             } 
+            else if (card.id === 'm_targeteddestruction') {
+                let targets = getStableCardsWithOwners((c, oIdx, cat, isPanda) => cat === 'upgrades' || cat === 'downgrades');
+                if (targets.length > 0) {
+                    promptTargetSelection(playerIndex, "Targeted Destruction", "Select an Upgrade or Downgrade to Sacrifice/Destroy.", targets, 1, (res) => {
+                        if (res.length > 0) {
+                            let action = (res[0]._ownerIdx === playerIndex) ? 'sacrifice' : 'destroy';
+                            removeCardFromStable(res[0]._ownerIdx, res[0].uid, action, onComplete);
+                        } else onComplete();
+                    });
+                } else onComplete();
+            }
             else if (card.id === 'm_unfairbargain') {
-                let opponents = gameState.players.filter(op => op.id !== playerIndex); 
+                let opponents = gameState.players.filter((op, idx) => idx !== playerIndex); 
                 let oppCards = opponents.map(p => ({
                     uid: 'p_'+p.id, name: p.name, type: CardTypes.BASIC, 
-                    effect: 'Trade hands with this player.', id: p.id, fullImage: ''
+                    effect: 'Trade hands with this player.', id: p.id, fullImage: '', _ownerIdx: p.id
                 }));
                 
                 promptTargetSelection(playerIndex, "Unfair Bargain", "Select a player to trade hands with.", oppCards, 1, (oppRes) => {
@@ -1066,8 +1331,7 @@
                         let tempHand = [...gameState.players[playerIndex].hand];
                         gameState.players[playerIndex].hand = [...gameState.players[targetIdx].hand];
                         gameState.players[targetIdx].hand = tempHand;
-                        showToast(`${gameState.players[playerIndex].name} traded hands with ${gameState.players[targetIdx].name}!`);
-                        renderBoard();
+                        logAction(`${gameState.players[playerIndex].name} traded hands with ${gameState.players[targetIdx].name}!`);
                     }
                     onComplete();
                 });
@@ -1082,7 +1346,7 @@
             else if (card.id === 'm_shrinkray') {
                 let allPlayers = gameState.players.map(p => ({
                     uid: 'p_'+p.id, name: p.name, type: CardTypes.BASIC, 
-                    effect: 'Shrinkray this player.', id: p.id, fullImage: ''
+                    effect: 'Shrinkray this player.', id: p.id, fullImage: '', _ownerIdx: p.id
                 }));
                 
                 promptTargetSelection(playerIndex, "Unicorn Shrinkray", "Choose a player to shrink.", allPlayers, 1, (res) => {
@@ -1093,8 +1357,7 @@
                         
                         targetPlayer.stable.unicorns.forEach(u => gameState.discard.push(u));
                         targetPlayer.stable.unicorns = []; 
-                        showToast(`${targetPlayer.name} lost all unicorns to Shrinkray!`);
-                        renderBoard();
+                        logAction(`${targetPlayer.name} lost all unicorns to Shrinkray!`);
                         
                         let babiesBrought = 0;
                         const bringNextBaby = () => {
@@ -1115,9 +1378,9 @@
                     promptTargetSelection(playerIndex, "Unicorn Swap (Step 1)", "Select a Unicorn in your Stable to move.", myUnis, 1, (myUniRes) => {
                         if (myUniRes.length > 0) {
                             let uniToMove = myUniRes[0];
-                            let opponents = gameState.players.filter(op => op.id !== playerIndex).map(p => ({
+                            let opponents = gameState.players.filter((op, idx) => idx !== playerIndex).map(p => ({
                                 uid: 'p_'+p.id, name: p.name, type: CardTypes.BASIC, 
-                                effect: 'Give Unicorn to this player.', id: p.id, fullImage: ''
+                                effect: 'Give Unicorn to this player.', id: p.id, fullImage: '', _ownerIdx: p.id
                             }));
                             
                             promptTargetSelection(playerIndex, "Unicorn Swap (Step 2)", "Select an opponent to receive your Unicorn.", opponents, 1, (oppRes) => {
@@ -1154,13 +1417,236 @@
         }
 
         function executeETBEffect(card, playerIndex, onComplete) {
-            onComplete();
+            if (card.id === 'c_americorn') {
+                let opponents = gameState.players.filter((op, idx) => idx !== playerIndex && op.hand.length > 0).map(p => ({
+                    uid: 'p_'+p.id, name: p.name, type: CardTypes.BASIC, 
+                    effect: 'Pull a card from this player.', id: p.id, fullImage: '', _ownerIdx: p.id
+                }));
+                if (opponents.length > 0) {
+                    promptTargetSelection(playerIndex, "Americorn", "Select a player to pull a card from.", opponents, 1, (res) => {
+                        if (res.length > 0) {
+                            let targetIdx = res[0].id;
+                            let targetPlayer = gameState.players[targetIdx];
+                            let rIndex = Math.floor(Math.random() * targetPlayer.hand.length);
+                            let pulledCard = targetPlayer.hand.splice(rIndex, 1)[0];
+                            gameState.players[playerIndex].hand.push(pulledCard);
+                            logAction(`${gameState.players[playerIndex].name} pulled a card from ${targetPlayer.name}'s hand!`);
+                        }
+                        onComplete();
+                    });
+                } else { onComplete(); }
+            }
+            else if (card.id === 'c_alluring') {
+                let oppUpgrades = getStableCardsWithOwners((c, oIdx, cat, isPanda) => oIdx !== playerIndex && cat === 'upgrades');
+                if (oppUpgrades.length > 0) {
+                    promptTargetSelection(playerIndex, "Alluring Narwhal", "STEAL an Upgrade card.", oppUpgrades, 1, (res) => {
+                        if (res.length > 0) {
+                            removeCardFromStable(res[0]._ownerIdx, res[0].uid, 'move', (stolenCard) => {
+                                if (stolenCard) enterStable(stolenCard, playerIndex, onComplete, true);
+                                else onComplete();
+                            });
+                        } else onComplete();
+                    }, true);
+                } else onComplete();
+            }
+            else if (card.id === 'c_annoying') {
+                let opponents = gameState.players.map(p => ({
+                    uid: 'p_'+p.id, name: p.name, type: CardTypes.BASIC, 
+                    effect: 'Make this player discard.', id: p.id, fullImage: '', _ownerIdx: p.id
+                }));
+                promptTargetSelection(playerIndex, "Annoying Flying Unicorn", "Select a player to force a discard (or pass).", opponents, 1, (res) => {
+                    if (res.length > 0) {
+                        let targetIdx = res[0].id;
+                        triggerDiscard(targetIdx, 1, "Annoying Flying Unicorn", onComplete);
+                    } else onComplete();
+                }, true);
+            }
+            else if (card.id === 'c_chainsaw') {
+                let targets = getStableCardsWithOwners((c, oIdx, cat, isPanda) => cat === 'upgrades' || cat === 'downgrades');
+                if (targets.length > 0) {
+                    promptTargetSelection(playerIndex, "Chainsaw Unicorn", "Select an Upgrade or Downgrade to Sacrifice/Destroy (or pass).", targets, 1, (res) => {
+                        if (res.length > 0) {
+                            let action = (res[0]._ownerIdx === playerIndex) ? 'sacrifice' : 'destroy';
+                            removeCardFromStable(res[0]._ownerIdx, res[0].uid, action, onComplete);
+                        } else onComplete();
+                    }, true);
+                } else { onComplete(); }
+            }
+            else if (card.id === 'c_classynarwhal') {
+                let upgradesInDeck = gameState.deck.filter(c => c.type === CardTypes.UPGRADE);
+                if (upgradesInDeck.length > 0) {
+                    promptTargetSelection(playerIndex, "Classy Narwhal", "Select an Upgrade card to add to your hand (or pass).", upgradesInDeck, 1, (res) => {
+                        if (res.length > 0) {
+                            let selectedUid = res[0].uid;
+                            let deckIdx = gameState.deck.findIndex(c => c.uid === selectedUid);
+                            if (deckIdx > -1) {
+                                let pulled = gameState.deck.splice(deckIdx, 1)[0];
+                                gameState.players[playerIndex].hand.push(pulled);
+                                logAction(`${gameState.players[playerIndex].name} searched their deck for an Upgrade card.`);
+                            }
+                        }
+                        gameState.deck = shuffle(gameState.deck);
+                        onComplete();
+                    }, true);
+                } else {
+                    showToast("No Upgrade cards found in the deck.");
+                    gameState.deck = shuffle(gameState.deck);
+                    onComplete();
+                }
+            }
+            else if (card.id === 'c_greedy') {
+                drawCard(playerIndex, true);
+                logAction(`${gameState.players[playerIndex].name} drew a card from Greedy Flying Unicorn.`);
+                onComplete();
+            }
+            else if (card.id === 'c_magicalflying') {
+                let magics = gameState.discard.filter(c => c.type === CardTypes.MAGIC);
+                if (magics.length > 0) {
+                    promptTargetSelection(playerIndex, "Magical Flying Unicorn", "Select a Magic card to add to your hand.", magics, 1, (res) => {
+                        if(res.length > 0) {
+                            let idx = gameState.discard.findIndex(c => c.uid === res[0].uid);
+                            if (idx > -1) gameState.players[playerIndex].hand.push(gameState.discard.splice(idx, 1)[0]);
+                        }
+                        onComplete();
+                    }, true);
+                } else onComplete();
+            }
+            else if (card.id === 'c_majesticflying') {
+                let unis = gameState.discard.filter(c => c.type === CardTypes.BASIC || c.type === CardTypes.MAGICAL || c.type === CardTypes.BABY);
+                if (unis.length > 0) {
+                    promptTargetSelection(playerIndex, "Majestic Flying Unicorn", "Select a Unicorn card to add to your hand.", unis, 1, (res) => {
+                        if(res.length > 0) {
+                            let idx = gameState.discard.findIndex(c => c.uid === res[0].uid);
+                            if (idx > -1) gameState.players[playerIndex].hand.push(gameState.discard.splice(idx, 1)[0]);
+                        }
+                        onComplete();
+                    }, true);
+                } else onComplete();
+            }
+            else if (card.id === 'c_mermaid') {
+                let players = gameState.players.map(p => ({ uid: 'p_'+p.id, name: p.name, type: CardTypes.BASIC, effect: 'Target player', id: p.id }));
+                promptTargetSelection(playerIndex, "Mermaid Unicorn", "Choose a player.", players, 1, (pRes) => {
+                    if (pRes.length > 0) {
+                        let tIdx = pRes[0].id;
+                        let tCards = getStableCardsWithOwners((c, oIdx) => oIdx === tIdx);
+                        if(tCards.length > 0) {
+                            promptTargetSelection(playerIndex, "Mermaid Unicorn", "Choose a card to return to hand.", tCards, 1, (cRes) => {
+                                if(cRes.length > 0) {
+                                    removeCardFromStable(tIdx, cRes[0].uid, 'move', (removed) => {
+                                        if (removed) gameState.players[tIdx].hand.push(removed);
+                                        onComplete();
+                                    });
+                                } else onComplete();
+                            }, true);
+                        } else onComplete();
+                    } else onComplete();
+                }, true);
+            }
+            else if (card.id === 'c_narwhaltorpedo') {
+                let p = gameState.players[playerIndex];
+                let dgUids = p.stable.downgrades.map(c => c.uid);
+                const sacNext = () => {
+                    if(dgUids.length === 0) { onComplete(); return; }
+                    removeCardFromStable(playerIndex, dgUids.shift(), 'sacrifice', sacNext);
+                };
+                sacNext();
+            }
+            else if (card.id === 'c_rainbow') {
+                let basics = gameState.players[playerIndex].hand.filter(c => c.type === CardTypes.BASIC);
+                if (basics.length > 0) {
+                    promptTargetSelection(playerIndex, "Rainbow Unicorn", "Bring a Basic Unicorn into your Stable.", basics, 1, (res) => {
+                        if(res.length > 0) {
+                            let idx = gameState.players[playerIndex].hand.findIndex(c => c.uid === res[0].uid);
+                            let brought = gameState.players[playerIndex].hand.splice(idx, 1)[0];
+                            enterStable(brought, playerIndex, onComplete, true);
+                        } else onComplete();
+                    }, true);
+                } else onComplete();
+            }
+            else if (card.id === 'c_seductive') {
+                let oppUnis = getStableCardsWithOwners((c, oIdx, cat, isPanda) => oIdx !== playerIndex && cat === 'unicorns' && !isPanda);
+                if (oppUnis.length > 0) {
+                    promptTargetSelection(playerIndex, "Seductive Unicorn", "STEAL a Unicorn card.", oppUnis, 1, (res) => {
+                        if (res.length > 0) {
+                            let targetUni = res[0];
+                            let originalOwner = targetUni._ownerIdx;
+                            removeCardFromStable(originalOwner, targetUni.uid, 'move', (stolenCard) => {
+                                if (stolenCard) {
+                                    card._stolenUid = stolenCard.uid;
+                                    card._originalOwner = originalOwner;
+                                    enterStable(stolenCard, playerIndex, onComplete, true); 
+                                } else onComplete();
+                            });
+                        } else onComplete();
+                    }, false); // Required target!
+                } else onComplete();
+            }
+            else if (card.id === 'c_shabby') {
+                let downgrades = gameState.deck.filter(c => c.type === CardTypes.DOWNGRADE);
+                if (downgrades.length > 0) {
+                    promptTargetSelection(playerIndex, "Shabby The Narwhal", "Select a Downgrade to add to hand.", downgrades, 1, (res) => {
+                        if (res.length > 0) {
+                            let idx = gameState.deck.findIndex(c => c.uid === res[0].uid);
+                            gameState.players[playerIndex].hand.push(gameState.deck.splice(idx, 1)[0]);
+                        }
+                        gameState.deck = shuffle(gameState.deck);
+                        onComplete();
+                    }, true);
+                } else { gameState.deck = shuffle(gameState.deck); onComplete(); }
+            }
+            else if (card.id === 'c_sharkwithahorn') {
+                // Fix: Attach `_ownerIdx` so it correctly identifies in the generic UI layout.
+                let mappedCard = {...card, _ownerIdx: playerIndex};
+                promptTargetSelection(playerIndex, "Shark With A Horn", "SACRIFICE this card to DESTROY a Unicorn?", [mappedCard], 1, (res) => {
+                    if (res.length > 0) {
+                        removeCardFromStable(playerIndex, card.uid, 'sacrifice', () => {
+                            let unis = getStableCardsWithOwners((c, oIdx, cat, isPanda) => cat === 'unicorns' && !isPanda);
+                            promptTargetSelection(playerIndex, "Shark With A Horn", "DESTROY a Unicorn.", unis, 1, (dRes) => {
+                                if (dRes.length > 0) removeCardFromStable(dRes[0]._ownerIdx, dRes[0].uid, 'destroy', onComplete);
+                                else onComplete();
+                            }, false);
+                        });
+                    } else onComplete();
+                }, true);
+            }
+            else if (card.id === 'c_swiftflying') {
+                let instants = gameState.discard.filter(c => c.type === CardTypes.INSTANT);
+                if (instants.length > 0) {
+                    promptTargetSelection(playerIndex, "Swift Flying Unicorn", "Select an Instant card to add to your hand.", instants, 1, (res) => {
+                        if (res.length > 0) {
+                            let idx = gameState.discard.findIndex(c => c.uid === res[0].uid);
+                            gameState.players[playerIndex].hand.push(gameState.discard.splice(idx, 1)[0]);
+                        }
+                        onComplete();
+                    }, true);
+                } else onComplete();
+            }
+            else if (card.id === 'c_thegreatnarwhal') {
+                let narwhals = gameState.deck.filter(c => c.name.toLowerCase().includes('narwhal'));
+                if (narwhals.length > 0) {
+                    promptTargetSelection(playerIndex, "The Great Narwhal", "Select a Narwhal to add to hand.", narwhals, 1, (res) => {
+                        if (res.length > 0) {
+                            let idx = gameState.deck.findIndex(c => c.uid === res[0].uid);
+                            gameState.players[playerIndex].hand.push(gameState.deck.splice(idx, 1)[0]);
+                        }
+                        gameState.deck = shuffle(gameState.deck);
+                        onComplete();
+                    }, true);
+                } else { gameState.deck = shuffle(gameState.deck); onComplete(); }
+            }
+            else if (card.id === 'c_unicornonthecob') {
+                drawCard(playerIndex, false);
+                drawCard(playerIndex, false);
+                triggerDiscard(playerIndex, 1, "Unicorn On The Cob", onComplete);
+            }
+            else {
+                onComplete();
+            }
         }
 
         function initGame(numPlayers) {
             gameState.numPlayers = numPlayers;
             gameState.winCondition = numPlayers >= 6 ? 6 : 7;
-            document.getElementById('win-condition-display').textContent = gameState.winCondition;
             
             const babyPrototypes = CardDB.filter(c => c.type === CardTypes.BABY);
             gameState.nursery = [];
@@ -1169,40 +1655,64 @@
             gameState.deck = shuffle(generateDeck());
             gameState.discard = [];
             gameState.players = [];
+            gameState.logs = [];
+            gameState.reaction = null;
             
+            const myName = document.getElementById('player-name').value.trim() || 'Player 1';
+
             for (let i = 0; i < numPlayers; i++) {
-                const name = connectedPlayers[i] ? connectedPlayers[i].name : `Player ${i + 1}`;
+                const pInfo = connectedPlayers[i] || {};
+                const name = pInfo.name || (i === 0 ? myName : `Player ${i + 1}`);
+                const cId = pInfo.clientId || (i === 0 ? myClientId : `client_${i}`);
                 gameState.players.push({
-                    id: i, name: name,
-                    hand: [], stable: { unicorns: [], upgrades: [], downgrades: [] }
+                    id: i,
+                    name: name,
+                    clientId: cId,
+                    hand: [],
+                    stable: { unicorns: [], upgrades: [], downgrades: [] }
                 });
             }
+            
+            updateLocalPlayerIndex();
 
             for (let i = 0; i < numPlayers; i++) {
                 if(gameState.nursery.length > 0) gameState.players[i].stable.unicorns.push(gameState.nursery.pop());
                 for (let j = 0; j < 5; j++) drawCard(i, false);
             }
 
+            gameState.currentPlayerIndex = 0;
+            gameState.currentPhase = Phases.BEGINNING;
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'SYNC_STATE', state: gameState }));
+            }
+
             document.getElementById('game-setup').style.display = 'none';
             document.getElementById('game-board').style.display = 'flex';
-            gameState.currentPlayerIndex = 0;
-            
+            document.getElementById('win-condition-display').textContent = gameState.winCondition;
             renderBoard();
-            setTimeout(startTurn, 500);
+            
+            if (gameState.currentPlayerIndex === localPlayerIndex) {
+                setTimeout(startTurn, 500);
+            }
         }
 
         function startTurn() {
+            if (gameState.currentPlayerIndex !== localPlayerIndex) return;
+            
             gameState.currentPhase = Phases.BEGINNING;
             gameState.hasDrawnThisTurn = false;
             gameState.actionsPlayed = 0;
-            gameState.actionLimit = 1;
+            gameState.actionLimit = 1; 
             
             const pIndex = gameState.currentPlayerIndex;
-            showToast(`${gameState.players[pIndex].name}'s Turn`);
+            logAction(`--- ${gameState.players[pIndex].name}'s Turn ---`);
             
             processPuppicorns(pIndex, () => {
                 renderBoard();
-                processBeginningOfTurnEffects(pIndex, () => setTimeout(continueToDraw, 800));
+                processBeginningOfTurnEffects(pIndex, () => {
+                    setTimeout(continueToDraw, 800);
+                });
             });
         }
 
@@ -1228,10 +1738,63 @@
 
         function processBeginningOfTurnEffects(pIndex, onComplete) {
             const p = gameState.players[pIndex];
+            let drawCount = 0;
+            let sadistics = 0;
+            let hasRhinocorn = false;
+
             if (!hasBlindingLight(pIndex)) {
-                if (p.stable.upgrades.some(c => c.id === 'u_doubledutch')) gameState.actionLimit = 2;
+                if (p.stable.upgrades.some(c => c.id === 'u_doubledutch')) {
+                    gameState.actionLimit = 2;
+                }
+                
+                drawCount += p.stable.upgrades.filter(c => c.id === 'u_extratail').length;
+                sadistics = p.stable.downgrades.filter(c => c.id === 'd_sadistic').length;
+                hasRhinocorn = p.stable.unicorns.some(c => c.id === 'c_rhinocorn');
             }
-            onComplete();
+
+            broadcastGameState(); // Force sync actionLimit immediately
+
+            const resolveDraws = () => {
+                for(let i=0; i<drawCount; i++) drawCard(pIndex, false);
+                if (drawCount > 0) { renderBoard(); broadcastGameState(); }
+                
+                if (hasRhinocorn) {
+                    let unis = getStableCardsWithOwners((c, oIdx, cat, isPanda) => cat === 'unicorns' && !isPanda);
+                    if(unis.length > 0) {
+                        promptTargetSelection(pIndex, "Rhinocorn", "You may DESTROY a Unicorn. If you do, skip to your End of Turn.", unis, 1, (res) => {
+                            if(res.length > 0) {
+                                removeCardFromStable(res[0]._ownerIdx, res[0].uid, 'destroy', () => {
+                                    gameState.currentPhase = Phases.END; 
+                                    renderBoard();
+                                    broadcastGameState();
+                                    setTimeout(endTurn, 500); 
+                                });
+                            } else onComplete();
+                        }, true);
+                    } else onComplete();
+                } else {
+                    onComplete();
+                }
+            };
+
+            const resolveSadistic = (count) => {
+                if (count <= 0) { resolveDraws(); return; }
+                
+                let myUnis = getStableCardsWithOwners((c, oIdx, cat, isPanda) => oIdx === pIndex && cat === 'unicorns' && !isPanda);
+                if (myUnis.length > 0) {
+                    promptTargetSelection(pIndex, "Sadistic Ritual", "Sacrifice a Unicorn card.", myUnis, 1, (res) => {
+                        if (res.length > 0) {
+                            removeCardFromStable(pIndex, res[0].uid, 'sacrifice', () => {
+                                drawCard(pIndex, true); 
+                                logAction(`${gameState.players[pIndex].name} drew a card from Sadistic Ritual.`);
+                                resolveSadistic(count - 1);
+                            });
+                        } else resolveSadistic(count - 1);
+                    });
+                } else resolveSadistic(count - 1);
+            };
+
+            resolveSadistic(sadistics);
         }
 
         function continueToDraw() {
@@ -1242,38 +1805,36 @@
                 gameState.hasDrawnThisTurn = true;
                 gameState.currentPhase = Phases.ACTION;
                 renderBoard();
-                if (gameState.currentPlayerIndex !== 0) setTimeout(doAITurn, 1500);
+                broadcastGameState();
             }, 800);
         }
 
         function attemptPlayCard(uid) {
-            if (gameState.currentPlayerIndex !== 0 || gameState.currentPhase !== Phases.ACTION) return;
+            if (gameState.currentPlayerIndex !== localPlayerIndex || gameState.currentPhase !== Phases.ACTION) return;
             if (gameState.actionsPlayed >= gameState.actionLimit) {
                 showToast("Action limit reached for this turn."); return;
             }
-            const p = gameState.players[0];
+            
+            const p = gameState.players[localPlayerIndex];
             const cardIdx = p.hand.findIndex(c => c.uid === uid);
             if (cardIdx === -1) return;
             const card = p.hand[cardIdx];
 
-            if (!canPlayCard(card, 0)) {
+            if (!canPlayCard(card, localPlayerIndex)) {
                 showToast("Cannot play this card right now."); return;
             }
 
             if (card.type === CardTypes.DOWNGRADE) {
-                let opponents = gameState.players.filter(op => op.id !== 0).map(op => ({
+                let opponents = gameState.players.filter((op, idx) => idx !== localPlayerIndex).map(op => ({
                     uid: 'p_'+op.id, name: op.name, type: CardTypes.BASIC, 
-                    effect: 'Place downgrade on this player.', id: op.id, fullImage: ''
+                    effect: 'Place downgrade on this player.', id: op.id, fullImage: '', _ownerIdx: op.id
                 }));
-                promptTargetSelection(0, "Select Target", "Who do you want to downgrade?", opponents, 1, (res) => {
+                promptTargetSelection(localPlayerIndex, "Select Target", "Who do you want to downgrade?", opponents, 1, (res) => {
                     if (res.length > 0) {
                         card._targetIdx = res[0].id;
                         p.hand.splice(cardIdx, 1);
                         gameState.actionsPlayed++;
-                        proposeCardPlay(card, 0, () => {
-                            renderBoard();
-                            if (!checkWinCondition()) checkAutoEndTurn();
-                        });
+                        proposeCardPlay(card, localPlayerIndex);
                     }
                 }, true);
                 return;
@@ -1282,67 +1843,47 @@
             p.hand.splice(cardIdx, 1);
             gameState.actionsPlayed++;
             
-            proposeCardPlay(card, 0, () => {
-                renderBoard();
-                if (!checkWinCondition()) {
-                    checkAutoEndTurn();
-                }
-            });
-        }
-
-        function doAITurn() {
-            const pIndex = gameState.currentPlayerIndex;
-            const p = gameState.players[pIndex];
-            
-            let playableCards = p.hand.filter(c => canPlayCard(c, pIndex));
-            
-            if (playableCards.length > 0 && gameState.actionsPlayed < gameState.actionLimit) {
-                let cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)];
-                
-                if (cardToPlay.type === CardTypes.DOWNGRADE) {
-                    let validTargets = gameState.players.filter(op => op.id !== pIndex);
-                    cardToPlay._targetIdx = validTargets[Math.floor(Math.random() * validTargets.length)].id;
-                }
-
-                p.hand = p.hand.filter(c => c.uid !== cardToPlay.uid);
-                gameState.actionsPlayed++;
-                
-                proposeCardPlay(cardToPlay, pIndex, () => {
-                    renderBoard();
-                    setTimeout(endTurn, 1000);
-                });
-            } else {
-                setTimeout(endTurn, 1000);
-            }
+            proposeCardPlay(card, localPlayerIndex);
         }
 
         function endTurn() {
+            if (gameState.currentPlayerIndex !== localPlayerIndex) return;
+
             gameState.currentPhase = Phases.END;
             renderBoard();
             
             const pIndex = gameState.currentPlayerIndex;
             const p = gameState.players[pIndex];
             
-            if (p.hand.length > 7) triggerDiscard(pIndex, p.hand.length - 7, "Hand limit exceeded", finishEndTurn);
-            else finishEndTurn();
+            if (p.hand.length > 7) {
+                triggerDiscard(pIndex, p.hand.length - 7, "Hand limit exceeded", finishEndTurn);
+            } else {
+                finishEndTurn();
+            }
         }
 
         function finishEndTurn() {
             if (checkWinCondition()) return;
             gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.numPlayers;
+            gameState.currentPhase = Phases.BEGINNING;
             renderBoard();
-            setTimeout(startTurn, 1000);
-        }
-
-        function endGame(winnerIndex) {
-            document.getElementById('game-board').style.display = 'none';
-            document.getElementById('game-over').style.display = 'flex';
-            document.getElementById('winner-text').textContent = `${gameState.players[winnerIndex].name} Wins!`;
+            broadcastGameState();
+            
+            if (gameState.currentPlayerIndex === localPlayerIndex) {
+                 setTimeout(startTurn, 500);
+            }
         }
 
         function getCardHTML(card, isSmall = false, isFaceDown = false, onClickHandler = '') {
             if (!card && !isFaceDown) return '';
             if (isFaceDown) return `<div class="game-card card-back ${isSmall ? 'small' : ''}" ${onClickHandler ? `onclick="${onClickHandler}"` : ''}></div>`;
+            
+            // Check if the card is representing a player for targeting purposes
+            if (card.uid && card.uid.startsWith('p_')) {
+                return `<div class="player-select-btn" data-uid="${card.uid}" ${onClickHandler ? `onclick="${onClickHandler}"` : ''}>
+                            ${card.name}
+                        </div>`;
+            }
             
             let typeClass = '';
             switch(card.type) {
@@ -1354,6 +1895,7 @@
                 case CardTypes.DOWNGRADE: typeClass = 'card-downgrade'; break;
                 case CardTypes.INSTANT: typeClass = 'card-instant'; break;
             }
+            
             const fullImgHtml = card.fullImage ? `<img src="${card.fullImage}" class="full-card-image" alt="${card.name}">` : '';
             const svgArt = getCardSvgIllustration(card);
             const safeName = card.name ? card.name.replace(/"/g, '&quot;') : '';
@@ -1371,15 +1913,20 @@
         }
 
         function renderBoard() {
+            if (!gameState || !gameState.players || gameState.players.length === 0) return;
+
+            updateLocalPlayerIndex();
+
             const cp = gameState.currentPlayerIndex;
-            document.getElementById('current-player-display').textContent = `${gameState.players[cp].name}'s Turn`;
+            const currentPlayerObj = gameState.players[cp] || { name: 'Player' };
+
+            document.getElementById('current-player-display').textContent = `${currentPlayerObj.name}'s Turn`;
             document.getElementById('current-phase-display').innerHTML = `Phase: <span class="font-bold text-white">${gameState.currentPhase}</span>`;
-            document.getElementById('deck-count').textContent = gameState.deck.length;
-            document.getElementById('deck-count-hud').textContent = gameState.deck.length;
-            document.getElementById('discard-count').textContent = gameState.discard.length;
-            document.getElementById('nursery-count').textContent = gameState.nursery.length;
+            document.getElementById('deck-count').textContent = gameState.deck ? gameState.deck.length : 0;
+            document.getElementById('discard-count').textContent = gameState.discard ? gameState.discard.length : 0;
+            document.getElementById('nursery-count').textContent = gameState.nursery ? gameState.nursery.length : 0;
             
-            if (gameState.discard.length > 0) {
+            if (gameState.discard && gameState.discard.length > 0) {
                 document.getElementById('discard-top-card').textContent = `Top: ${gameState.discard[gameState.discard.length - 1].name}`;
             } else {
                 document.getElementById('discard-top-card').textContent = "Empty";
@@ -1387,23 +1934,35 @@
 
             const oppArea = document.getElementById('opponents-area');
             oppArea.innerHTML = '';
+            
             for (let i = 0; i < gameState.numPlayers; i++) {
-                if (i === 0) continue; 
+                if (i === localPlayerIndex) continue; 
+                
                 const p = gameState.players[i];
+                if (!p) continue;
+
                 const isOpActive = i === cp ? 'active-player-highlight' : '';
                 
+                let upgradesDowngradesHtml = '';
+                [...p.stable.upgrades, ...p.stable.downgrades].forEach(card => { upgradesDowngradesHtml += getCardHTML(card, true); });
+                
+                let unicornsHtml = '';
+                p.stable.unicorns.forEach(card => { unicornsHtml += getCardHTML(card, true); });
+
                 let oppHtml = `
                     <div class="opponent-stable-container ${isOpActive}">
                         <div class="flex justify-between w-full mb-1 px-2 text-xs text-gray-300 border-b border-gray-600 pb-0.5">
                             <span class="font-bold text-red-300">${p.name}</span>
-                            <span>U: <span class="text-white">${countUnicorns(i)}</span> | H: <span class="text-white">${p.hand.length}</span></span>
+                            <span>U: <span class="text-white">${countUnicorns(i)}</span> | H: <span class="text-white">${p.hand ? p.hand.length : 0}</span></span>
                         </div>
-                        <div class="stable small-cards">
+                        <div class="stable">
+                            <div class="stable-row small-cards">${upgradesDowngradesHtml}</div>
+                            ${(upgradesDowngradesHtml && unicornsHtml) ? '<div class="stable-divider"></div>' : ''}
+                            <div class="stable-row small-cards">${unicornsHtml}</div>
+                        </div>
                 `;
-                [...p.stable.upgrades, ...p.stable.downgrades, ...p.stable.unicorns].forEach(card => { oppHtml += getCardHTML(card, true); });
-                oppHtml += `</div>`;
                 
-                if (hasNannyCam(i) && p.hand.length > 0) {
+                if (hasNannyCam(i) && p.hand && p.hand.length > 0) {
                     oppHtml += `<div class="opponent-visible-hand">`;
                     p.hand.forEach(card => { oppHtml += getCardHTML(card, true); });
                     oppHtml += `</div>`;
@@ -1413,35 +1972,48 @@
                 oppArea.innerHTML += oppHtml;
             }
 
-            const myPlayer = gameState.players[0];
+            const myPlayer = gameState.players[localPlayerIndex] || { name: 'You', stable: { unicorns: [], upgrades: [], downgrades: [] }, hand: [] };
             const myContainer = document.getElementById('my-stable-container');
-            if (cp === 0) myContainer.classList.add('active-player-highlight');
+            document.getElementById('my-stable-title').textContent = `${myPlayer.name}'s Stable`;
+
+            if (cp === localPlayerIndex) myContainer.classList.add('active-player-highlight');
             else myContainer.classList.remove('active-player-highlight');
             
-            document.getElementById('my-unicorn-count').textContent = countUnicorns(0);
+            document.getElementById('my-unicorn-count').textContent = countUnicorns(localPlayerIndex);
             
             const myStableEl = document.getElementById('my-stable');
-            myStableEl.innerHTML = '';
-            [...myPlayer.stable.upgrades, ...myPlayer.stable.downgrades, ...myPlayer.stable.unicorns].forEach(card => {
-                myStableEl.innerHTML += getCardHTML(card, false);
-            });
+            
+            let myUpgradesHtml = '';
+            [...myPlayer.stable.upgrades, ...myPlayer.stable.downgrades].forEach(card => { myUpgradesHtml += getCardHTML(card, false); });
+            
+            let myUnicornsHtml = '';
+            myPlayer.stable.unicorns.forEach(card => { myUnicornsHtml += getCardHTML(card, false); });
+
+            myStableEl.innerHTML = `
+                <div class="stable-row">${myUpgradesHtml}</div>
+                ${(myUpgradesHtml && myUnicornsHtml) ? '<div class="stable-divider"></div>' : ''}
+                <div class="stable-row">${myUnicornsHtml}</div>
+            `;
 
             const handEl = document.getElementById('my-hand');
             handEl.innerHTML = '';
-            myPlayer.hand.forEach((card) => {
-                let isPlayable = false;
-                if (cp === 0 && gameState.currentPhase === Phases.ACTION && gameState.actionsPlayed < gameState.actionLimit) {
-                    isPlayable = canPlayCard(card, 0);
-                }
-                
-                let html = getCardHTML(card, false, false, isPlayable ? `attemptPlayCard('${card.uid}')` : '');
-                if (isPlayable) html = html.replace('class="game-card', 'class="game-card ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 cursor-pointer');
-                else html = html.replace('class="game-card', 'class="game-card cursor-not-allowed opacity-80');
-                handEl.innerHTML += html;
-            });
+            if (myPlayer.hand) {
+                myPlayer.hand.forEach((card) => {
+                    let isPlayable = false;
+                    
+                    if (cp === localPlayerIndex && gameState.currentPhase === Phases.ACTION && gameState.actionsPlayed < gameState.actionLimit) {
+                        isPlayable = canPlayCard(card, localPlayerIndex);
+                    }
+                    
+                    let html = getCardHTML(card, false, false, isPlayable ? `attemptPlayCard('${card.uid}')` : '');
+                    if (isPlayable) html = html.replace('class="game-card', 'class="game-card ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 cursor-pointer');
+                    else html = html.replace('class="game-card', 'class="game-card cursor-not-allowed opacity-80');
+                    handEl.innerHTML += html;
+                });
+            }
 
             const btnActionDraw = document.getElementById('bottom-right-actions');
-            if (gameState.currentPlayerIndex === 0 && gameState.currentPhase === Phases.ACTION && gameState.actionsPlayed < gameState.actionLimit) {
+            if (gameState.currentPlayerIndex === localPlayerIndex && gameState.currentPhase === Phases.ACTION && gameState.actionsPlayed < gameState.actionLimit) {
                 btnActionDraw.style.display = 'block';
             } else {
                 btnActionDraw.style.display = 'none';
@@ -1507,9 +2079,17 @@
                             if (selectedUids.includes(card.uid)) {
                                 selectedUids = selectedUids.filter(u => u !== card.uid);
                                 cardEl.classList.remove('ring-4', 'ring-yellow-400');
-                            } else if (selectedUids.length < requiredCount) {
-                                selectedUids.push(card.uid);
-                                cardEl.classList.add('ring-4', 'ring-yellow-400');
+                            } else {
+                                if (requiredCount === 1) {
+                                    // Automatic deselect behavior for a single target required
+                                    selectedUids = [card.uid];
+                                    let allSelected = container.querySelectorAll('.ring-4.ring-yellow-400');
+                                    allSelected.forEach(el => el.classList.remove('ring-4', 'ring-yellow-400'));
+                                    cardEl.classList.add('ring-4', 'ring-yellow-400');
+                                } else if (selectedUids.length < requiredCount) {
+                                    selectedUids.push(card.uid);
+                                    cardEl.classList.add('ring-4', 'ring-yellow-400');
+                                }
                             }
                             confirmBtn.disabled = selectedUids.length !== requiredCount;
                         };
@@ -1531,16 +2111,17 @@
         }
 
         document.getElementById('btn-action-draw').addEventListener('click', () => {
-            if (gameState.currentPlayerIndex === 0 && gameState.currentPhase === Phases.ACTION && gameState.actionsPlayed < gameState.actionLimit) {
-                drawCard(0);
+            if (gameState.currentPlayerIndex === localPlayerIndex && gameState.currentPhase === Phases.ACTION && gameState.actionsPlayed < gameState.actionLimit) {
+                drawCard(localPlayerIndex);
                 gameState.actionsPlayed++;
                 renderBoard();
+                broadcastGameState(); 
                 checkAutoEndTurn();
             }
         });
 
         document.getElementById('btn-end-turn').addEventListener('click', () => {
-            if (gameState.currentPlayerIndex === 0 && gameState.currentPhase === Phases.ACTION) endTurn();
+            if (gameState.currentPlayerIndex === localPlayerIndex && gameState.currentPhase === Phases.ACTION) endTurn();
         });
 
         // Tooltip listeners
